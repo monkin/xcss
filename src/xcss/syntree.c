@@ -8,6 +8,7 @@ syntree_t syntree_create(heap_t h, str_t s) {
 		r->first = r->last = 0;
 		r->parent = 0;
 		r->max_position = r->position = str_begin(s);
+		r->str = s;
 	}
 	return r;
 }
@@ -41,7 +42,7 @@ syntree_t syntree_rollback(syntree_t st) {
 	return st->parent;
 }
 
-syntree_t syntree_named_start(syntree_t st, int nm, str_it_t it) {
+syntree_t syntree_named_start(syntree_t st, int nm) {
 	syntree_node_t nd = heap_alloc(st->heap, sizeof(struct syntree_node_s));
 	if(nd) {
 		nd->is_start = 1;
@@ -49,9 +50,7 @@ syntree_t syntree_named_start(syntree_t st, int nm, str_it_t it) {
 		nd->value = 0;
 		nd->next = 0;
 		nd->heap = st->heap;
-		st->position = nd->position = it;
-		if(st->position>st->max_position)
-			st->max_position = st->position;
+		nd->position = st->position;
 		if(st->last) {
 			st->last->next = nd;
 			st->last = nd;
@@ -61,7 +60,7 @@ syntree_t syntree_named_start(syntree_t st, int nm, str_it_t it) {
 	return st;
 }
 
-syntree_t syntree_named_end(syntree_t st, str_it_t it) {
+syntree_t syntree_named_end(syntree_t st) {
 	syntree_node_t nd = heap_alloc(st->heap, sizeof(struct syntree_node_s));
 	if(nd) {
 		nd->is_start = 0;
@@ -69,9 +68,7 @@ syntree_t syntree_named_end(syntree_t st, str_it_t it) {
 		nd->value = 0;
 		nd->next = 0;
 		nd->heap = st->heap;
-		st->position = nd->position = it;
-		if(st->position>st->max_position)
-			st->max_position = st->position;
+		nd->position = st->position;
 		if(st->last) {
 			st->last->next = nd;
 			st->last = nd;
@@ -127,6 +124,13 @@ str_t syntree_value(syntree_node_t stn) {
 	return 0;
 }
 
+syntree_t syntree_seek(syntree_t st, str_it_t pos) {
+	assert(pos<=str_end(st->str));
+	st->position = pos; 
+	if(pos>st->max_position)
+		st->max_position = pos;
+	return st;
+}
 
 
 
