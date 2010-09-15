@@ -24,7 +24,7 @@ static xcss_node_type_t get_node_type(str_it_t i, str_it_t e) {
 				return XCSS_NODE_CLASS;
 			case '/':
 				return XCSS_NODE_COMMENT;
-			case ';':
+			case '\"':
 				return XCSS_NODE_INCLUDE;
 		}
 	}
@@ -104,6 +104,7 @@ static void parse_node_rule(syntree_t st) {
 		return;
 	}
 	i++;
+	p_skip_spaces(i,e);
 	syntree_seek(st, i);
 	parse_node_value(st);
 	return;
@@ -156,25 +157,28 @@ static void parse_node_class_name(syntree_t st) {
 
 static void parse_node_class_parent(syntree_t st) {
 	str_it_t i, e;
+	syntree_named_start(st, XCSS_NODE_CLASS_PARENT);
 	i = syntree_position(st);
 	e = str_end(syntree_str(st));
 	p_skip_spaces(i, e);
 	if(i==e ? 1 : *i!='(')
 		goto error;
 	i++;
+	syntree_seek(st, i);
 	parse_node_class_name(st);
 	while(!err()) {
+		i = syntree_position(st);
 		p_skip_spaces(i, e);
 		if(i==e)
 			goto error;
 		if(*i==')') {
 			syntree_seek(st, i+1);
+			syntree_named_end(st);
 			return;
 		} else if(*i==',') {
 			i++;
 			p_skip_spaces(i, e);
 			parse_node_class_name(st);
-			i = syntree_position(st);
 		} else
 			goto error;
 	}
@@ -274,6 +278,7 @@ static void parse_node_include(syntree_t st) {
 	p_skip_spaces(i, e);
 	if(*i!='(')
 		goto error;
+	i++;
 	p_skip_spaces(i, e);
 	if(*i!='"')
 		goto error;
@@ -283,10 +288,10 @@ static void parse_node_include(syntree_t st) {
 	if(err())
 		return;
 	p_skip(i, e, (isgraph(*i) && *i!=':' && *i!='"') || *i==' ');
+	syntree_seek(st,i);
 	syntree_named_end(st);
 	if(err())
 		return;
-	i = syntree_position(st);
 	if(i==e)
 		goto error;
 	if(*i!='"')
@@ -296,6 +301,9 @@ static void parse_node_include(syntree_t st) {
 	if(i==e)
 		goto error;
 	if(*i!=')')
+		goto error;
+	i++;
+	if(i==e)
 		goto error;
 	p_skip_spaces(i, e);
 	if(i==e)

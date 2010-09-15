@@ -33,7 +33,7 @@ str_it_t str_end(str_t);
  */
 str_t str_interval(heap_t, str_it_t, str_it_t);
 
-str_t str_copy(heap_t, str_t);
+str_t str_clone(heap_t, str_t);
 int str_compare(str_t, str_t);
 int str_equal(str_t, str_t);
 /*size_t str_length(str_t);*/

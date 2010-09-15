@@ -83,20 +83,14 @@ str_t str_interval(heap_t h, str_it_t ps1, str_it_t ps2) {
 	return res;
 }
 
-str_t str_copy(heap_t h, str_t s) {
-	if(s) {
-		int mem_size = sizeof(may_str_s) + s->length + 1;
-		str_t r = heap_alloc(h, mem_size);
-		if(r) {
-			r->data = ((char *)r) + sizeof(may_str_s);
-			r->data[r->length] = 0;
-			memcpy(r, s, mem_size);
-		}
-		return r;
-	} else {
-		err_set(e_arguments);
+str_t str_clone(heap_t h, str_t s) {
+	str_t r;
+	assert(s);
+	r = str_create(h, s->length);
+	if(err())
 		return 0;
-	}
+	memcpy(r->data, s->data, s->length);
+	return r;
 }
 
 sbuilder_t sbuilder_create(heap_t h) {

@@ -24,6 +24,9 @@ static str_t read_file(heap_t h, str_t fname) {
 	size_t sz;
 	str_t content;
 	err_reset();
+	fname = str_clone(h, fname);
+	if(err())
+		return 0;
 	FILE *f = fopen(str_begin(fname), "r");
 	if(!f) {
 		err_set(e_xcss_io);
@@ -38,7 +41,8 @@ static str_t read_file(heap_t h, str_t fname) {
 	if(fread(str_begin(content), 1, sz, f)!=sz)
 		err_set(e_xcss_io);
 clean:
-	fclose(f);
+	if(f)
+		fclose(f);
 	return err() ? 0 : content;
 }
 
@@ -109,7 +113,7 @@ void class_write(xcss_class_t cl, FILE *f) {
 	for(i=cl->first_rule; i; i=i->next) {
 		fwrite("\t", 1, 1, f);
 		fwrite(str_begin(i->name), str_length(i->name), 1, f);
-		fprintf(f, ":");
+		fprintf(f, ": ");
 		fwrite(str_begin(i->value), str_length(i->value), 1, f);
 		fprintf(f, ";\n");
 	}
