@@ -83,17 +83,11 @@ syntree_node_t syntree_begin(syntree_t st) {
 }
 
 syntree_node_t syntree_next(syntree_node_t stn) {
-	int level = 1;
-	for(stn=stn->next; level>0 && stn; stn=stn->next) {
-		if(stn->is_start) {
-			level++;
-			if(level==1)
-				return stn;
-		} else {
-			level--;
-			if(level<0)
-				return 0;
-		}
+	int level = 0;
+	for(; level>=0 && stn; stn=stn->next) {
+		level += stn->is_start ? 1 : -1;
+		if(level==0 && (stn->next ? stn->next->is_start : 0))
+			return stn->next;
 	}
 	return 0;
 }

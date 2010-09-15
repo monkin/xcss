@@ -42,8 +42,10 @@ static void parse_node_name(syntree_t st) {
 		p_skip(i, e, isalnum(*i) || (*i=='_') || (*i=='-'));
 		if(i==e) {
 			err_set(e_xcss_syntax);
-		} else
-			syntree_named_end(syntree_seek(st, i));
+		} else {
+			syntree_seek(st, i);
+			syntree_named_end(st);
+		}
 	}
 }
 
@@ -74,6 +76,7 @@ static void parse_node_value(syntree_t st) {
 				if((e-i)>=2 ? i[0]=='$' && i[1]=='{' : 0)
 					break;
 			}
+			syntree_seek(st, i);
 			syntree_named_end(st);
 		}
 	}
@@ -90,6 +93,7 @@ static void parse_node_rule(syntree_t st) {
 	i = syntree_position(st);
 	e = str_end(syntree_str(st));
 	p_skip_spaces(i,e);
+	syntree_seek(st, i);
 	parse_node_name(st);
 	if(err())
 		return;
@@ -99,7 +103,8 @@ static void parse_node_rule(syntree_t st) {
 		err_set(e_xcss_syntax);
 		return;
 	}
-	syntree_seek(st, ++i);
+	i++;
+	syntree_seek(st, i);
 	parse_node_value(st);
 	return;
 }
@@ -137,11 +142,11 @@ static void parse_node_class_name(syntree_t st) {
 			if(!isclass_name_char(*j))
 				break;
 		}
-		if(i==e) {
-			goto error;
-		} else
-			syntree_named_end(syntree_seek(st, i));
-		return;
+		if(i!=e) {
+			syntree_seek(st, i);
+			syntree_named_end(st);
+			return;
+		}
 	error:
 		syntree_seek(st, i);
 		err_set(e_xcss_syntax);
@@ -165,7 +170,7 @@ static void parse_node_class_parent(syntree_t st) {
 		if(*i==')') {
 			syntree_seek(st, i+1);
 			return;
-		} else if(*i=',') {
+		} else if(*i==',') {
 			i++;
 			p_skip_spaces(i, e);
 			parse_node_class_name(st);
@@ -192,19 +197,25 @@ static void parse_node_class(syntree_t st) {
 	p_skip_spaces(i,e);
 	if(i==e)
 		goto error;
-	if(*i='(') {
+	if(*i=='(') {
 		parse_node_class_parent(st);
 		if(err())
 			return;
-	} else if(*i=='{') {
+		i = syntree_position(st);
+		p_skip_spaces(i,e);
+		if(i==e)
+			goto error;
+	}
+	if(*i=='{') {
 		i++;
 		while(i<e) {
 			p_skip_spaces(i, e);
 			if(i==e)
 				goto error;
+			syntree_seek(st, i);
 			if(*i=='/')
 				parse_node_comment(st);
-			else if(*i='}') {
+			else if(*i=='}') {
 				syntree_seek(st, i+1);
 				return;
 			} else {
@@ -217,7 +228,8 @@ static void parse_node_class(syntree_t st) {
 				syntree_named_end(st);
 				if(err())
 					return;
-			}	
+			}
+			i = syntree_position(st);
 		}
 	}
 error:
@@ -236,7 +248,7 @@ static void parse_node_comment(syntree_t st) {
 		return;
 	}
 	i+=2;
-	for(; i>e; i++) {
+	for(; i<e; i++) {
 		if((e-i)>=2 ? i[0]=='*' && i[1]=='/' : 0) {
 			syntree_seek(st, i+2);
 			return;
@@ -309,8 +321,9 @@ static void parse_node_namespace(syntree_t st) {
 		return;
 	i = syntree_position(st);
 	p_skip_spaces(i,e);
-	if(i==e ? *i!='[' : 1)
+	if(i==e ? 1 : *i!='[')
 		goto error;
+	i++;
 	while(i<e) {
 		p_skip_spaces(i, e);
 		if(i==e)
@@ -323,6 +336,7 @@ static void parse_node_namespace(syntree_t st) {
 		xcss_parse(st);
 		if(err())
 			return;
+		i = syntree_position(st);
 		if(i==e)
 			goto error;
 	}
@@ -382,8 +396,11 @@ syntree_t xcss_to_syntree(heap_t h, str_t xcss) {
 	if(err())
 		return 0;
 	e = str_end(xcss);
-	while(syntree_position(res)!=e)
+	while(syntree_position(res)!=e) {
 		xcss_parse(res);
+		if(err())
+			return 0;
+	}
 	return res;
 }
 

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <assert.h>
+#include <errno.h>
 
 ERR_DECLARE(e_xcss_io_error);
 ERR_DEFINE(e_xcss_io, "IO error.", 0);
@@ -34,7 +35,7 @@ static str_t read_file(heap_t h, str_t fname) {
 	content = str_create(h, sz);
 	if(err())
 		goto clean;
-	if(fread(str_begin(content), sz, 1, f)!=sz)
+	if(fread(str_begin(content), 1, sz, f)!=sz)
 		err_set(e_xcss_io);
 clean:
 	fclose(f);
@@ -67,7 +68,7 @@ static xcss_class_t class_create(heap_t h, str_t nm, str_t prefix) {
 	cl->prefix = prefix;
 	cl->heap = h;
 	cl->first_rule = cl->last_rule = 0;
-	return 0;
+	return cl;
 }
 
 static void class_append_rule(xcss_class_t cl, str_t nm, str_t val) {
@@ -108,7 +109,7 @@ void class_write(xcss_class_t cl, FILE *f) {
 	for(i=cl->first_rule; i; i=i->next) {
 		fwrite("\t", 1, 1, f);
 		fwrite(str_begin(i->name), str_length(i->name), 1, f);
-		fprintf(f, ": ");
+		fprintf(f, ":");
 		fwrite(str_begin(i->value), str_length(i->value), 1, f);
 		fprintf(f, ";\n");
 	}
@@ -186,7 +187,7 @@ static str_t get_rule_value(heap_t h, xcss_ns_t ns, syntree_node_t nd, FILE *ser
 		str_t s = syntree_value(nd);
 		if(err())
 			return 0;
-		if(syntree_name(nd)!=XCSS_NODE_TEXT) {
+		if(syntree_name(nd)==XCSS_NODE_TEXT) {
 			r = str_cat(h, r, s);
 			if(err())
 				return 0;
@@ -207,6 +208,7 @@ static str_t get_rule_value(heap_t h, xcss_ns_t ns, syntree_node_t nd, FILE *ser
 			}
 		}
 	}
+	return r;
 }
 
 static void xcss_process_node(heap_t h,
@@ -227,13 +229,13 @@ static void xcss_process_node(heap_t h,
 			nmp2 = syntree_value(stn);
 			if(err())
 				return;
+			str_t tmp = str_from_cs(h, "-");
+			if(err())
+				return;
+			nmp2 = str_cat(h, nmp2, tmp);
+			if(err())
+				return;
 			if(name_prefix) {
-				str_t tmp = str_from_cs(h, "-");
-				if(err())
-					return;
-				nmp2 = str_cat(h, tmp, nmp2);
-				if(err())
-					return;
 				nmp2 = str_cat(h, name_prefix, nmp2);
 				if(err())
 					return;
@@ -282,7 +284,7 @@ static void xcss_process_node(heap_t h,
 				}
 				stn = syntree_next(stn);
 			}
-			for(; stn; syntree_next(stn)) {
+			for(; stn; stn=syntree_next(stn)) {
 				str_t nm, vl;
 				syntree_node_t i = syntree_child(stn);
 				assert(syntree_name(i)==XCSS_NODE_NAME);
@@ -314,13 +316,79 @@ static void xcss_process_node(heap_t h,
 			break;
 		}
 		case XCSS_NODE_INCLUDE: {
-			break;
+			str_t fname, cnt;
+			str_it_t si;
+			syntree_t st;
+			syntree_node_t i = syntree_child(stn);
+			assert(syntree_name(i)==XCSS_NODE_INCLUDE_NAME);
+			fname = syntree_value(i);
+			if(err())
+				return;
+			if(fprefix)
+				fname = str_cat(h, fprefix, fname);
+			if(err())
+				return;
+			for(si=str_end(fname)-1; si>str_begin(fname); si--) {
+				if(*si=='/') {
+					fprefix = str_interval(h, str_begin(fname), si+1);
+					if(err())
+						return;
+				}
+			}
+			cnt = read_file(h, fname);
+			if(err())
+				return;
+			st = xcss_to_syntree(h, cnt);
+			if(err())
+				return;
+			for(i=syntree_begin(st); i; i=syntree_next(i)) {
+				xcss_process_node(h, i, ns, fprefix, name_prefix, sout, serr);
+				if(err())
+					return;
+			}
 		}
 	}
 }
 
 
 int main() {
+	str_t cnt;
+	heap_t h;
+	syntree_t st;
+	syntree_node_t i;
+	xcss_ns_t ns;
+	stderr = stdout;
+	h = heap_create(1024*64);
+	if(err()) {
+		err_reset();
+		return -1;
+	}
+	cnt = read_file(h, str_from_cs(h, "test.xcss"));
+	if(err()) {
+		err_reset();
+		return -1;
+	}
+	st = xcss_to_syntree(h, cnt);
+	if(err()) {
+		err_reset();
+		return -1;
+	}
+	ns = ns_create(h, ns);
+	for(i=syntree_begin(st); i; i=syntree_next(i)) {
+		xcss_process_node(h, i, ns, 0, 0, stdout, stderr);
+		if(err()) {
+			err_reset();
+			return -1;
+		}
+	}
+	/*void xcss_process_node(heap_t h,
+							  syntree_node_t stn,
+							  xcss_ns_t ns,
+							  str_t fprefix,
+							  str_t name_prefix,
+							  FILE *sout,
+							  FILE *serr)*/
+	heap_delete(h);
 	return 0;
 }
 
