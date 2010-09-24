@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 ERR_DECLARE(e_xcss_io_error);
 ERR_DEFINE(e_xcss_io, "IO error.", 0);
@@ -19,6 +20,40 @@ ERR_DEFINE(e_xcss_class, "Class not found.", 0);
 
 ERR_DECLARE(e_xcss_variable);
 ERR_DEFINE(e_xcss_variable, "Variable not found.", 0);
+
+#define FILE_BLOCK_SIZE (1024*64)
+
+static str_t read_stream(heap_t h, FILE *f) {
+	size_t sz;
+	heap_t tmph;
+	sbuilder_t sb;
+	str_t r = 0;
+	assert(h && f);
+	tmph = heap_create(1024*64*4);
+	if(err())
+		return 0;
+	sb = sbuilder_create(tmph);
+	if(err())
+		return 0;
+	do {
+		str_t s = str_create(tmph, FILE_BLOCK_SIZE);
+		if(err())
+			goto clean;
+		sz = fread(str_begin(s), 1, FILE_BLOCK_SIZE, f);
+		if(sz) {
+			str_t tmp = str_interval(tmph, str_begin(s), str_begin(s) + sz);
+			if(err())
+				goto clean;
+			sbuilder_append(sb, tmp);
+			if(err())
+				goto clean;
+		}
+	} while(sz==FILE_BLOCK_SIZE);
+	r = sbuilder_get(h, sb);
+clean:
+	heap_delete(tmph);
+	return r;
+}
 
 static str_t read_file(heap_t h, str_t fname) {
 	size_t sz;
@@ -355,44 +390,77 @@ static void xcss_process_node(heap_t h,
 }
 
 
-int main() {
+int main(int nargs, char **args) {
 	str_t cnt;
 	heap_t h;
 	syntree_t st;
 	syntree_node_t i;
 	xcss_ns_t ns;
-	stderr = stdout;
-	h = heap_create(1024*64);
-	if(err()) {
-		err_reset();
-		return -1;
-	}
-	cnt = read_file(h, str_from_cs(h, "test.xcss"));
-	if(err()) {
-		err_reset();
-		return -1;
-	}
-	st = xcss_to_syntree(h, cnt);
-	if(err()) {
-		err_reset();
-		return -1;
-	}
-	ns = ns_create(h, ns);
-	for(i=syntree_begin(st); i; i=syntree_next(i)) {
-		xcss_process_node(h, i, ns, 0, 0, stdout, stderr);
-		if(err()) {
-			err_reset();
-			return -1;
+	FILE *out;
+	char *file_name = 0;
+	out = stderr = stdout;
+	int a;
+	for(a=0; a<nargs; a++) {
+		if(strcmp(args[a], "-h")==0 || strcmp(args[a], "--help")==0) {
+			printf("XCSS processor\n");
+			printf("Arguments:\n");
+			printf("\t-h, --help     show this help and exit\n");
+			printf("\t-o             output file\n");
+			printf("\t-i             input file\n");
+			return 0;
+		} else if(strcmp(args[a], "-o")==0) {
+			if((a+1)>=nargs) {
+				fprintf(stderr, "Invalid argument. File name expected after -o.\nUse --help option for more information.\n");
+				return -1;
+			} else {
+				a++;
+				out = fopen(args[a], "w");
+				if(!out) {
+					fprintf(stderr, "Can\'t create output file \"%s\"", args[a]);
+					return -1;
+				}
+			}
+		} else if(strcmp(args[a], "-i")==0) {
+			if((a+1)>=nargs) {
+				fprintf(stderr, "Invalid argument. File name expected after -i.\nUse --help option for more information.\n");
+				return -1;
+			} else {
+				a++;
+				file_name = args[a];
+			}
 		}
 	}
-	/*void xcss_process_node(heap_t h,
-							  syntree_node_t stn,
-							  xcss_ns_t ns,
-							  str_t fprefix,
-							  str_t name_prefix,
-							  FILE *sout,
-							  FILE *serr)*/
-	heap_delete(h);
+	h = heap_create(1024*64);
+	if(err())
+		goto error;
+	if(!file_name) {
+		cnt = read_stream(h, stdin);
+		if(err())
+			goto error;
+	} else {
+		cnt = str_from_cs(h, file_name);
+		if(err())
+			goto error;
+		cnt = read_file(h, cnt);
+		if(err())
+			goto error;
+	}
+	st = xcss_to_syntree(h, cnt);
+	if(err())
+		goto error;
+	ns = ns_create(h, ns);
+	for(i=syntree_begin(st); i; i=syntree_next(i)) {
+		xcss_process_node(h, i, ns, 0, 0, out, stderr);
+		if(err())
+			goto error;
+	}
+	h = heap_delete(h);
+	if(out!=stdout)
+		fclose(out);
 	return 0;
+error:
+	err_reset();
+	heap_delete(h);
+	return -1;
 }
 

@@ -142,6 +142,7 @@ static void parse_node_class_name(syntree_t st) {
 				goto error;
 			if(!isclass_name_char(*j))
 				break;
+			i = j;
 		}
 		if(i!=e) {
 			syntree_seek(st, i);
@@ -177,6 +178,7 @@ static void parse_node_class_parent(syntree_t st) {
 			return;
 		} else if(*i==',') {
 			i++;
+			syntree_seek(st,i);
 			p_skip_spaces(i, e);
 			parse_node_class_name(st);
 		} else
