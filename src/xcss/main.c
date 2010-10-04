@@ -301,7 +301,7 @@ static void xcss_process_node(heap_t h,
 			if(err())
 				return;
 			stn = syntree_next(stn);
-			if(syntree_name(stn)==XCSS_NODE_CLASS_PARENT) {
+			if(stn ? syntree_name(stn)==XCSS_NODE_CLASS_PARENT : 0) {
 				syntree_node_t i;
 				for(i=syntree_child(stn); i; i=syntree_next(i)) {
 					xcss_class_t pc;

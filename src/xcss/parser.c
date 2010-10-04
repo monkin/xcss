@@ -17,7 +17,13 @@ static xcss_node_type_t get_node_type(str_it_t i, str_it_t e) {
 	for(; i<e; i++) {
 		switch(*i) {
 			case ':':
-				return XCSS_NODE_RULE;
+				for(; i<e; i++) {
+					if(*i==';')
+						return XCSS_NODE_RULE;
+					else if(*i=='{')
+						return XCSS_NODE_CLASS;
+				}
+				break;
 			case '[':
 				return XCSS_NODE_NAMESPACE;
 			case '{':
@@ -118,6 +124,8 @@ static int isclass_name_char(int c) {
 		case '-':
 		case ':':
 		case '>':
+		case '*':
+		case '.':
 			return 1;
 		default:
 			return 0;
@@ -178,8 +186,8 @@ static void parse_node_class_parent(syntree_t st) {
 			return;
 		} else if(*i==',') {
 			i++;
-			syntree_seek(st,i);
 			p_skip_spaces(i, e);
+			syntree_seek(st,i);
 			parse_node_class_name(st);
 		} else
 			goto error;
